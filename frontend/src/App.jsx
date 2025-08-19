@@ -220,115 +220,154 @@
 // export default App;
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import "./App.css";
+import Chat from "./components/Chat";
+import WeatherWidget from "./components/WeatherWidget";
 
 function App() {
-  const [userId] = useState(() => uuidv4());
-  const [query, setQuery] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [location, setLocation] = useState({ lat: null, lon: null });
-
-  const backendUrl = "http://127.0.0.1:8000";
-
+  const [userId] = useState(() => {
+    // Generate a new UUID for each session (page load)
+    // While keeping a persistent user ID in localStorage
+    const storedUserId = localStorage.getItem("agrisense_user_id");
+    const sessionUserId = uuidv4(); // New ID for this session
+    
+    // Store base user ID if not already stored
+    if (!storedUserId) {
+      localStorage.setItem("agrisense_user_id", sessionUserId);
+      return sessionUserId;
+    }
+    
+    // Return stored ID with a unique session identifier
+    return `${storedUserId}_${Date.now()}`;
+  });
+  
+  const [darkMode, setDarkMode] = useState(() => {
+    // Get user's preference from localStorage or use system preference
+    const saved = localStorage.getItem("agrisense_darkmode");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return saved ? saved === "true" : prefersDark;
+  });
+  
+  const [showWeather, setShowWeather] = useState(false);
+  const [userLocation, setUserLocation] = useState({
+    lat: null,
+    lon: null,
+    status: "pending" // pending, loading, success, error
+  });
+  
   // Dark mode toggle
   useEffect(() => {
     document.body.className = darkMode ? "dark-mode" : "";
+    localStorage.setItem("agrisense_darkmode", darkMode);
   }, [darkMode]);
-
-  // Fetch chat history
+  
+  // Handle page refresh/load to ensure fresh chat
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await axios.get(`${backendUrl}/history`, {
-          params: { user_id: userId, limit: 50 }
-        });
-        if (res.data.history) {
-          const formatted = res.data.history.map(msg => ({
-            sender: msg.role === "user" ? "user" : "ai",
-            text: msg.content
-          }));
-          setMessages(formatted);
-        }
-      } catch (err) {
-        console.error("Failed to fetch history:", err);
-      }
+    // Set a flag in sessionStorage to identify this as a new session
+    sessionStorage.setItem("agrisense_session_start", Date.now().toString());
+    
+    // Clear any temporary chat data in sessionStorage
+    sessionStorage.removeItem("agrisense_chat_messages");
+    
+    // Function to handle page refresh or close
+    const handleBeforeUnload = () => {
+      // This function runs before the page is refreshed/closed
+      sessionStorage.removeItem("agrisense_session_start");
     };
-    fetchHistory();
-  }, [userId]);
+    
+    // Add event listener
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   // Get user location
   useEffect(() => {
     if (navigator.geolocation) {
+      setUserLocation(prev => ({ ...prev, status: "loading" }));
       navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        (err) => console.error("Location permission denied.", err)
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+            status: "success"
+          });
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setUserLocation(prev => ({ 
+            ...prev, 
+            status: "error",
+            lat: 28.6139, // Default fallback to New Delhi
+            lon: 77.2090
+          }));
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
     } else {
-      console.warn("Geolocation not supported");
+      setUserLocation(prev => ({ 
+        ...prev, 
+        status: "error",
+        lat: 28.6139, // Default fallback to New Delhi 
+        lon: 77.2090
+      }));
     }
   }, []);
 
-  // Send query to backend
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setMessages(prev => [...prev, { sender: "user", text: query }]);
-    setQuery("");
-
-    try {
-      const formData = new FormData();
-      formData.append("user_id", userId);
-      formData.append("query", query);
-      formData.append("lat", location.lat || 0);
-      formData.append("lon", location.lon || 0);
-
-      const res = await axios.post(`${backendUrl}/ask`, formData);
-      if (res.data.response) {
-        setMessages(prev => [...prev, { sender: "ai", text: res.data.response }]);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { sender: "ai", text: "Error fetching AI response." }]);
-    }
+  // Toggle weather widget
+  const toggleWeatherWidget = () => {
+    setShowWeather(prev => !prev);
   };
 
   return (
-    <div>
-      <button className="dark-toggle" onClick={() => setDarkMode(prev => !prev)}>
-        {darkMode ? "Light Mode" : "Dark Mode"}
-      </button>
-
-      <h1 style={{ textAlign: "center", marginTop: "50px" }}>AI + Crop & Weather Assistant</h1>
-
-      <div className="chat-container">
-        <div className="chat-window">
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`message ${msg.sender}`}>
-              <img
-                className="avatar"
-                src={msg.sender === "user" ? "/user-avatar.png" : "/ai-avatar.png"}
-                alt="avatar"
-              />
-              <span>{msg.text}</span>
-            </div>
-          ))}
+    <div className="app-container">
+      <header className="app-header">
+        <div className="logo">
+          <img src="/vite.svg" alt="AgriSense Logo" className="logo-image" />
+          <h1>AgriSense</h1>
         </div>
+        
+        <div className="header-controls">
+          <button 
+            className="weather-toggle" 
+            onClick={toggleWeatherWidget} 
+            title="Weather Information"
+          >
+            {showWeather ? "🌤️" : "🌦️"}
+          </button>
+          
+          <button 
+            className="dark-toggle" 
+            onClick={() => setDarkMode(prev => !prev)}
+            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {darkMode ? "☀️" : "🌙"}
+          </button>
+        </div>
+      </header>
 
-        <form className="chat-input" onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Type your question..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button type="submit">Send</button>
-        </form>
-      </div>
+      {showWeather && (
+        <WeatherWidget 
+          lat={userLocation.lat} 
+          lon={userLocation.lon} 
+          locationStatus={userLocation.status}
+          onClose={toggleWeatherWidget}
+        />
+      )}
+
+      <main className="app-main">
+        <Chat userId={userId} userLocation={userLocation} />
+      </main>
+      
+      <footer className="app-footer">
+        <p>© {new Date().getFullYear()} AgriSense - AI-powered farming assistant</p>
+      </footer>
     </div>
   );
 }

@@ -1,51 +1,51 @@
 Crop,Development Phase,Critical Temperature Threshold
-Broccoli,Head Growth,3 consecutive days =>34°C
-Cabbage,Head Growth,3 consecutive days =>34°C
-Capsicum,Fruit development and Ripening,3 consecutive days =>32°C
-Carrots,Carrot Root Development,<5°C
-Cauliflower,Curd Growth,3 consecutive days =>32°C
-Chinese Cabbage,Head Growth,3 consecutive days =>32°C
-Green Beans,Flowering and Pod Set,3 consecutive days =>34°C
-Lettuce,Hearting,3 consecutive days =>30°C
-Potatoes,Tuber Initiation,<29°C
-Pumpkin,Flowering and Pollination,>32°C
-Sweet Corn,Flowering and Pollination,3 consecutive days =>35°C
-Tomato,"Flowering, Pollination & Fruit Set",3 consecutive days =>29°C
-Apples (Perennial fruit),"Chill Accumulation, Fruit Development and Fill",Variety specific Chill Portions =>32°C
-Lettuce,Hearting,28 °C mean maximum
-Cauliflower,Curd induction,22 °C
-Banana,Fruit maturity,38 °C
+Broccoli,Head Growth,3 consecutive days =>34C
+Cabbage,Head Growth,3 consecutive days =>34C
+Capsicum,Fruit development and Ripening,3 consecutive days =>32C
+Carrots,Carrot Root Development,<5C
+Cauliflower,Curd Growth,3 consecutive days =>32C
+Chinese Cabbage,Head Growth,3 consecutive days =>32C
+Green Beans,Flowering and Pod Set,3 consecutive days =>34C
+Lettuce,Hearting,3 consecutive days =>30C
+Potatoes,Tuber Initiation,<29C
+Pumpkin,Flowering and Pollination,>32C
+Sweet Corn,Flowering and Pollination,3 consecutive days =>35C
+Tomato,"Flowering, Pollination & Fruit Set",3 consecutive days =>29C
+Apples (Perennial fruit),"Chill Accumulation, Fruit Development and Fill",Variety specific Chill Portions =>32ï¿½C
+Lettuce,Hearting,28 C mean maximum
+Cauliflower,Curd induction,22 C
+Banana,Fruit maturity,38 C
 ,,
-Citrus,Early fruit development,30°C
-Pineapple,Flower initiation and pre-harvest,>35°C
-Tomato,2 week period Pre-anthesis,29°C  mean maximum
-Macadamia,Retention of racemes and nuts,Declines rapidly >30°C
-Capsicum,Flowering,32°C
-Sweet Corn,3â€“4 weeks post flowering,32°C
-Avocado,Flowering and fruit development,33°C
-Pumpkin,Flowering,>35 °C
-Watermelon,Average Growth rate ,18-35 °C
-Melon,Average Growth rate ,18-35 °C
-Sweet potato,Average Growth rate ,18-35 °C
-Cucumber,Average Growth rate ,12-30 (35) °C
-Pepper,Average Growth rate ,12-30 (35) °C
-Sweet corn,Average Growth rate ,12-30 (35) °C
-Snap beans,Average Growth rate ,12-30 (35) °C
-Tomato,Average Growth rate ,12-30 (35) °C
-Onion,Average Growth rate ,7-30 °C
-Garlic,Average Growth rate ,7-30 °C
-Turnip,Average Growth rate ,5-25 °C
-Pea,Average Growth rate ,5-25 °C
-Potato,Average Growth rate ,5-25 (30)°C
-Lettuce,Average Growth rate ,5-25 (30)°C
-Cabbage,Average Growth rate ,5-25 °C
-Wheat,Post anthesis,26 °C
-Corn,Grain filling,38 °C
-Cotton,Reproductive,45 °C
-Pearl Millet,Seedling,35 °C
-Tomato,Emergence,30 °C
-Brassica,Flowering,29 °C
-Cool season pulses,Flowering,25 °C
-Groundnut,Pollen production,34°C
-Cowpea,Flowering,41°C
-Rice,Grain yield,34 °C
+Citrus,Early fruit development,30C
+Pineapple,Flower initiation and pre-harvest,>35C
+Tomato,2 week period Pre-anthesis,29C  mean maximum
+Macadamia,Retention of racemes and nuts,Declines rapidly >30C
+Capsicum,Flowering,32C
+Sweet Corn,3â€“4 weeks post flowering,32C
+Avocado,Flowering and fruit development,33C
+Pumpkin,Flowering,>35 C
+Watermelon,Average Growth rate ,18-35 C
+Melon,Average Growth rate ,18-35 C
+Sweet potato,Average Growth rate ,18-35 C
+Cucumber,Average Growth rate ,12-30 (35) C
+Pepper,Average Growth rate ,12-30 (35) C
+Sweet corn,Average Growth rate ,12-30 (35) C
+Snap beans,Average Growth rate ,12-30 (35) C
+Tomato,Average Growth rate ,12-30 (35) C
+Onion,Average Growth rate ,7-30 C
+Garlic,Average Growth rate ,7-30 C
+Turnip,Average Growth rate ,5-25 C
+Pea,Average Growth rate ,5-25 C
+Potato,Average Growth rate ,5-25 (30)C
+Lettuce,Average Growth rate ,5-25 (30)C
+Cabbage,Average Growth rate ,5-25 C
+Wheat,Post anthesis,26 C
+Corn,Grain filling,38 C
+Cotton,Reproductive,45 C
+Pearl Millet,Seedling,35 C
+Tomato,Emergence,30 C
+Brassica,Flowering,29 C
+Cool season pulses,Flowering,25 C
+Groundnut,Pollen production,34C
+Cowpea,Flowering,41C
+Rice,Grain yield,34 C
