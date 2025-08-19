@@ -602,16 +602,17 @@ async def ask(
     # Store user message first
     store_message(user_id, "user", query)
     
-    # Define the new system prompt for the agent
+    # Define the new system prompt for the agent with stronger anti-hallucination guidance
     system_prompt = """You are an agricultural assistant. Your goal is to provide accurate, context-aware answers about soil, crops, and farming.
 
-If the user's question is general or missing key details (e.g., 'When should I sell my crop?', 'What pesticides should I use?'), do not assume the crop or condition.
-
-Instead, politely ask follow-up questions to collect the missing information first (e.g., 'Which crop are you asking about?', 'What stage of growth is your crop in?').
-
-Once all necessary details are clarified, then provide a helpful, precise answer.
-
-If the question is complete and specific, answer directly.
+CRITICAL RULES:
+1. If the user's question is general or missing key details (e.g., 'When should I sell my crop?', 'What pesticides should I use?'), do not assume the crop or condition.
+2. Instead, politely ask follow-up questions to collect the missing information first (e.g., 'Which crop are you asking about?', 'What stage of growth is your crop in?').
+3. NEVER invent or hallucinate information that isn't provided in the context.
+4. If you don't have specific data on a topic, clearly state that you don't have this information rather than making something up.
+5. For market prices, weather conditions, and specific crop data, ONLY use information explicitly provided in the context.
+6. Once all necessary details are clarified, then provide a helpful, precise answer based on facts.
+7. If the question is complete and specific, answer directly with factual information.
 
 Always keep the conversation clear, simple, and farmer-friendly."""
     
@@ -1058,54 +1059,139 @@ For example, you might ask:
 
     # Enhanced logic for market price and selling questions
     if any(word in query.lower() for word in ["sell", "price", "market", "rates", "cost", "worth", "value", "mandi"]):
+        # Check if this is a general query about "market prices for common crops" without specifying a crop
+        is_general_price_query = ("common crops" in query.lower() or 
+                                "crops" in query.lower() and "price" in query.lower() and not crop_name)
+        
         # First, try to get specific market price data with enhanced query
-        retriever_market = db_market.as_retriever(search_kwargs={"k": 5})
-        market_query = f"{crop_name if crop_name else ''} price market rates {state if state else ''} {district if district else ''}"
-        market_docs = retriever_market.get_relevant_documents(market_query)
-        market_context = " ".join([d.page_content for d in market_docs])
+        retriever_market = db_market.as_retriever(search_kwargs={"k": 8})
+        
+        if is_general_price_query:
+            # For general queries, get prices for common crops
+            market_query = f"price market rates for common crops in India {state if state else ''}"
+            common_crops = ["rice", "wheat", "maize", "soybean", "cotton", "potato", "onion", "tomato"]
+            
+            # Create a consolidated market context with information about common crops
+            consolidated_market_context = ""
+            for crop in common_crops:
+                crop_docs = retriever_market.get_relevant_documents(f"{crop} price market rates")
+                if crop_docs:
+                    crop_context = " ".join([d.page_content for d in crop_docs])
+                    consolidated_market_context += f"\n{crop}: {crop_context}"
+            
+            market_context = consolidated_market_context
+        else:
+            # For specific crop queries
+            market_query = f"{crop_name if crop_name else ''} price market rates {state if state else ''} {district if district else ''}"
+            market_docs = retriever_market.get_relevant_documents(market_query)
+            market_context = " ".join([d.page_content for d in market_docs])
         
         # Get weather forecast for next 7 days to help with selling decision
         weather_forecast = await get_weather_forecast(lat, lon, days=7)
         
-        # Improved prompt for market-related questions
-        ai_prompt = f"""
-        You are an agricultural market advisor helping a farmer make an informed selling decision.
-        
-        **CRITICAL INSTRUCTIONS:**
-        1. Use ONLY data from the context when discussing specific prices or market trends.
-        2. If you don't have market data for the specific crop or location, clearly acknowledge this.
-        3. Provide practical advice about timing of sales based on weather and market information.
-        4. If the query isn't specifically about selling but about general pricing, focus on providing the available price information.
-        5. Never invent prices or trends not supported by the context.
-        
-        **Farmer's Location:** {city or ''}, {district or ''}, {state or ''}
-        **Farmer's Question:** "{query}"
-        **Crop (if identified):** {crop_name or "Not specified"}
-        
-        **Context:**
-        - **Market Price Data:** {market_context}
-        - **Weather Forecast (next 7 days):** {weather_forecast}
-        
-        Respond with practical advice that helps the farmer make an informed decision about their crop sales.
-        """
+        if is_general_price_query:
+            # Special handling for general crop price queries
+            ai_prompt = f"""
+            You are responding to a general query about current market prices for common crops.
+            
+            **CRITICAL INSTRUCTIONS:**
+            1. ONLY mention price information that is EXPLICITLY mentioned in the context.
+            2. If you don't have current price data, clearly state this fact.
+            3. DO NOT mention weather conditions unless the user specifically asked about them.
+            4. DO NOT invent or hallucinate price data that isn't in the context.
+            5. If price data is limited, suggest other resources the farmer could check.
+            6. Format your answer as a clear list of crops and their current market prices.
+            7. If no data is available, provide general advice on where farmers can check current prices.
+            
+            **Farmer's Location:** {city or ''}, {state or ''}
+            **Farmer's Question:** "{query}"
+            
+            **Available Market Price Information:**
+            {market_context}
+            
+            Provide only factual information about crop prices based strictly on the context provided.
+            """
+        else:
+            # Original prompt for specific crop price queries
+            ai_prompt = f"""
+            You are an agricultural market advisor helping a farmer make an informed selling decision.
+            
+            **CRITICAL INSTRUCTIONS:**
+            1. Use ONLY data from the context when discussing specific prices or market trends.
+            2. If you don't have market data for the specific crop or location, clearly acknowledge this.
+            3. Provide practical advice about timing of sales based on weather and market information.
+            4. If the query isn't specifically about selling but about general pricing, focus on providing the available price information.
+            5. Never invent prices or trends not supported by the context.
+            
+            **Farmer's Location:** {city or ''}, {district or ''}, {state or ''}
+            **Farmer's Question:** "{query}"
+            **Crop (if identified):** {crop_name or "Not specified"}
+            
+            **Context:**
+            - **Market Price Data:** {market_context}
+            - **Weather Forecast (next 7 days):** {weather_forecast}
+            
+            Respond with practical advice that helps the farmer make an informed decision about their crop sales.
+            """
 
         response = client.chat.completions.create(
             model="llama3-8b-8192",
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": "You are an agricultural expert providing strictly factual information about crop prices. Never make up data."},
                 {"role": "user", "content": ai_prompt}
             ],
-            temperature=0.2  # Lower temperature for more factual responses
+            temperature=0.1  # Even lower temperature for more factual responses
         )
         ai_content = response.choices[0].message.content
 
-        # Post-process to catch common hallucinations in market advice
+        # Extensive post-processing to catch hallucinations in market advice
+        # Check for invented price references
         if "current price" in ai_content.lower() and "current price" not in market_context.lower():
             ai_content = ai_content.replace("current price", "typical price")
         
+        # Check for currency symbols and numbers that aren't in the data
         if "₹" in ai_content and "₹" not in market_context:
-            # Only remove the specific price hallucinations, not the entire response
             ai_content = re.sub(r'₹\s*[\d,]+(\.\d+)?', "[price data not available]", ai_content)
+        
+        # Check for invented weather impacts on market prices
+        if is_general_price_query and ("thunderstorm" in ai_content.lower() or "rainfall" in ai_content.lower() or "weather forecast" in ai_content.lower()):
+            # Remove weather references from general market price queries
+            weather_phrases = [
+                r'based on the weather forecast.*?\.', 
+                r'the weather conditions.*?\.', 
+                r'due to (the )?expected rainfall.*?\.', 
+                r'thunderstorms? (might|may|could|will).*?\.', 
+                r'looking at the weather forecast.*?\.', 
+                r'monitor the weather.*?\.', 
+                r'heavy rainfall.*?\.'
+            ]
+            
+            for phrase in weather_phrases:
+                ai_content = re.sub(phrase, '', ai_content, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Check for hallucinated specific crop references in general queries
+        if is_general_price_query and not any(crop in query.lower() for crop in ["rice", "wheat", "maize"]):
+            # If a specific crop is prominently mentioned but wasn't in the query, remove it
+            crops_not_mentioned = []
+            for crop in ["rice", "wheat", "maize", "soybean", "cotton"]:
+                if crop not in query.lower() and f"for {crop}" in ai_content.lower():
+                    crops_not_mentioned.append(crop)
+            
+            if crops_not_mentioned:
+                # Add a disclaimer if specific crops were hallucinated
+                ai_content += "\n\nNote: I've provided general market price information. For specific prices of particular crops in your area, I recommend checking with your local agricultural extension office or mandi."
+        
+        # Final fallback for completely fabricated responses
+        if is_general_price_query and not any(word in market_context.lower() for word in ["price", "market", "rate", "cost"]):
+            ai_content = """I don't currently have access to up-to-date market prices for common crops. For the most accurate and current market prices, I recommend:
+
+1. Checking your local Agricultural Produce Market Committee (APMC) or mandi
+2. Contacting your district agriculture office
+3. Using agricultural price apps like AgMarknet or Kisan Suvidha
+4. Consulting local farmer producer organizations
+5. Checking agricultural news websites for recent market trends
+
+Market prices fluctuate daily based on supply, demand, and quality, so it's best to check these resources for the most current information."""
 
         store_message(user_id, "assistant", ai_content)
         return {"query": query, "location": location_info, "response": ai_content}
