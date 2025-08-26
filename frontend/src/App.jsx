@@ -219,7 +219,10 @@ function App() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState([]);
   const [darkMode, setDarkMode] = useState(false);
-  const [location, setLocation] = useState({ lat: null, lon: null });
+  const [location, setLocation] = useState(() => {
+    const savedLocation = localStorage.getItem('kishanmitra_location');
+    return savedLocation ? JSON.parse(savedLocation) : { lat: null, lon: null };
+  });
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState("en");
   const [isLoading, setIsLoading] = useState(false);
@@ -227,7 +230,9 @@ function App() {
   const [lastUserQuery, setLastUserQuery] = useState("");
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [mapPosition, setMapPosition] = useState([20.5937, 78.9629]); // Default to center of India
-  const [locationName, setLocationName] = useState("");
+  const [locationName, setLocationName] = useState(() => {
+    return localStorage.getItem('kishanmitra_location_name') || "";
+  });
   const [locationSearch, setLocationSearch] = useState("");
 
   
@@ -726,25 +731,62 @@ const determineZoomLevel = (locationType) => {
     setQuery("");
     setIsLoading(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("user_id", userId);
-      formData.append("query", q);
-      formData.append("lat", location.lat || 0);
-      formData.append("lon", location.lon || 0);
-      formData.append("lang", lang);
+    const locationQueries = [
+    "what is my location", 
+    "where am i", 
+    "what's my location", 
+    "tell me my location",
+    "my location",
+    "which location"
+  ];
 
-      const res = await axios.post(`${backendUrl}/ask`, formData);
-      if (res.data.response) {
-        setMessages(prev => [...prev, { sender: "ai", text: res.data.response }]);
+  if (locationQueries.some(phrase => q.toLowerCase().includes(phrase))) {
+    // Handle location query directly in frontend
+    setTimeout(() => {
+      if (location.lat && location.lon) {
+        setMessages(prev => [...prev, { 
+          sender: "ai", 
+          text: `📍 Your current location is set to: **${locationName}** (${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}).\n\nI'll use this information to provide farming advice specific to your region's climate, soil conditions, and agricultural practices.`
+        }]);
+      } else {
+        setMessages(prev => [...prev, { 
+          sender: "ai", 
+          text: `You haven't set your location yet. Please click the location button at the top of the screen to set your location so I can provide location-specific farming advice.`
+        }]);
       }
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { sender: "ai", text: "Error fetching AI response." }]);
-    } finally {
       setIsLoading(false);
+    }, 500);
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append("user_id", userId);
+    formData.append("query", q);
+    
+    // Check if we have valid coordinates before sending
+    if (location.lat && location.lon) {
+      formData.append("lat", location.lat);
+      formData.append("lon", location.lon);
+    } else {
+      // If no location set, send a default location for India (New Delhi)
+      formData.append("lat", 28.6139);
+      formData.append("lon", 77.2090);
+      console.warn("Using default location coordinates since user location is not set");
     }
-  };
+    formData.append("lang", lang);
+
+    const res = await axios.post(`${backendUrl}/ask`, formData);
+    if (res.data.response) {
+      setMessages(prev => [...prev, { sender: "ai", text: res.data.response }]);
+    }
+  } catch (err) {
+    console.error(err);
+    setMessages(prev => [...prev, { sender: "ai", text: "Error fetching AI response." }]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Voice input handler
   const startListening = () => {
@@ -779,35 +821,59 @@ const determineZoomLevel = (locationType) => {
   };
 
   const handleLocationSelect = async () => {
-    if (mapPosition) {
-      // Update the location state with the selected map position
-      const newLocation = { lat: mapPosition[0], lon: mapPosition[1] };
-      setLocation(newLocation);
-      
-      try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${mapPosition[0]}&lon=${mapPosition[1]}&zoom=10`
-        );
-        const address = response.data.address;
-        const locationDisplay = address.village || address.town || address.city || address.county || address.state || 'Selected location';
-        setLocationName(locationDisplay);
-        
-        // Optionally save the selected location to localStorage for persistence
-        localStorage.setItem('kishanmitra_location', JSON.stringify(newLocation));
-        localStorage.setItem('kishanmitra_location_name', locationDisplay);
-        
-        // Inform the user that location is updated (optional)
-        setMessages(prev => [...prev, { 
+  if (mapPosition) {
+    // Update the location state with the selected map position
+    const newLocation = { lat: mapPosition[0], lon: mapPosition[1] };
+    setLocation(newLocation);
+    
+    try {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${mapPosition[0]}&lon=${mapPosition[1]}&zoom=10`
+      );
+      const address = response.data.address;
+      const locationDisplay = address.village || address.town || address.city || address.county || address.state || 'Selected location';
+      setLocationName(locationDisplay);
+
+      // Optionally save the selected location to localStorage for persistence
+      localStorage.setItem('kishanmitra_location', JSON.stringify(newLocation));
+      localStorage.setItem('kishanmitra_location_name', locationDisplay);
+
+      // Inform the user that location is updated (optional)
+      setMessages(prev => [...prev, { 
           sender: "ai", 
-          text: `Location updated to: ${locationDisplay}. Future responses will be tailored to this location.` 
-        }]);
-      } catch (error) {
-        console.error("Error getting location name:", error);
-        setLocationName("Selected location");
-      }
+        text: `📍 Location successfully set to: **${locationDisplay}** (${newLocation.lat.toFixed(4)}, ${newLocation.lon.toFixed(4)})\n\nFuture responses will be tailored to your local agriculture conditions, weather patterns, and market information. You can change your location anytime using the location button at the top.` 
+      }]);
+
+      setShowLocationModal(false);
+
+    } catch (error) {
+      console.error("Error getting location name:", error);
+      setLocationName("Selected location");
       setShowLocationModal(false);
     }
-  };
+  }
+};
+
+useEffect(() => {
+  // Check if location is not set after initial load
+  const timer = setTimeout(() => {
+    if (!location.lat || !location.lon) {
+      // Add a helpful message about setting location
+      setMessages(prev => {
+        // Only add if no messages yet or if the last message isn't already this notification
+        if (prev.length === 0 || prev[prev.length-1].text !== "For the most accurate farming advice, please set your location using the location button at the top.") {
+          return [...prev, { 
+            sender: "ai", 
+            text: "For the most accurate farming advice, please set your location using the location button at the top." 
+          }];
+        }
+        return prev;
+      });
+    }
+  }, 1000);
+  
+  return () => clearTimeout(timer);
+}, []);
 
   return (
 

@@ -36,7 +36,7 @@ h1 {
 }
 
 .subtitle {
-  color: #4caf50;
+  color: #14381b;
   font-size: 1.1rem;
   margin-top: 8px;
   margin-bottom: 0;
@@ -593,25 +593,31 @@ button:disabled {
 .control-panel {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  max-width: 600px;
+  max-width: 450px;
   margin: 0 auto 10px;
-  gap: 10px;
+  gap: 15px;
 }
 
 .language-selector, .location-selector {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 38px;
+  width: 200px;
 }
 
 .language-selector select, .location-btn {
-  padding: 6px 10px;
-  border-radius: 6px;
+  width: 130px;
+  height: 38px;
+  padding: 0px 10px;
+  border-radius: 8px;
   border: 1px solid #ccc;
   background-color: white;
   font-size: 14px;
+  display: flex;
+  align-items: center;
 }
 
 .dark-mode .language-selector select, .dark-mode .location-btn {
@@ -621,11 +627,12 @@ button:disabled {
 }
 
 .location-btn {
+  width: 130px;
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  max-width: 200px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
