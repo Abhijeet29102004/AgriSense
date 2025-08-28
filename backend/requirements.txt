@@ -19,10 +19,8 @@ protobuf==4.21.0
 urllib3==1.26.18
 tf-keras==2.15.0
 
-fastapi
-uvicorn
+# Other dependencies
 httpx
-pandas
 python-dotenv
 groq
 langchain
@@ -32,3 +30,7 @@ deep-translator
 geopy
 PyPDF2
 sqlalchemy
+langchain-community
+python-multipart
+passlib[bcrypt]
+python-jose[cryptography]

@@ -7,6 +7,7 @@ import time
 from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 # agrimarket/CommodityAndCommodityHeads.csv
 load_dotenv()
 # Load commodity codes
@@ -21,8 +22,17 @@ def get_url(Commodity, CommodityHead, Market=0, date_from=None, date_to=None):
         date_to = datetime.today()
     if date_from is None:
         date_from = date_to
-    date_from_str = date_from.strftime('%d-%b-%Y')
-    date_to_str = date_to.strftime('%d-%b-%Y')
+
+    # If date_from is a string, use it directly; else, format it
+    if isinstance(date_from, str):
+        date_from_str = date_from
+    else:
+        date_from_str = date_from.strftime('%d-%b-%Y')
+    if isinstance(date_to, str):
+        date_to_str = date_to
+    else:
+        date_to_str = date_to.strftime('%d-%b-%Y')
+
     parameters = {
         "Tx_Commodity": Commodity,
         "Tx_State": "0",
@@ -73,6 +83,22 @@ def get_table_rows(table):
     return rows
 
 
+def fetch_commodity_data(commodity_code, commodity_head, target_date):
+    url = get_url(commodity_code, commodity_head, Market=0, date_from=target_date, date_to=target_date)
+    try:
+        soup = get_soup_from_url(url)
+        tables = get_all_tables(soup)
+        if not tables:
+            return []
+        table = tables[0]
+        headers = get_table_headers(table)
+        rows = get_table_rows(table)
+        return [dict(zip(headers, row)) for row in rows if len(row) == len(headers)]
+    except Exception as e:
+        print(f"Error fetching all markets - {commodity_code}: {e}")
+        return []
+
+
 def daily_update(num_days=45):
     # Connect to SQLite database
     db_url = os.getenv("DATABASE_URL")
@@ -90,19 +116,19 @@ def daily_update(num_days=45):
     date_col = None
     if not df.empty:
         date_col = [col for col in df.columns if 'Date' in col or 'date' in col][0]
-        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        # Parse using the correct format
+        df[date_col] = pd.to_datetime(df[date_col], format='%d %b %Y', errors='coerce')
     else:
-        # Guess the column name for new data
         date_col = 'Price Date'
 
     # Calculate the date range for the latest num_days
     today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
-    date_list = [(today - timedelta(days=i)).date() for i in range(num_days-1, -1, -1)]
+    date_list = [(today - timedelta(days=i)).strftime('%d %b %Y') for i in range(num_days-1, -1, -1)]
 
     # Find which dates are missing in the DB
     existing_dates = set()
     if not df.empty:
-        existing_dates = set(df[date_col].dt.date.unique())
+        existing_dates = set(df[date_col].dt.strftime('%d %b %Y').unique())
     missing_dates = [d for d in date_list if d not in existing_dates]
 
     # Scrape and insert missing dates
@@ -110,38 +136,43 @@ def daily_update(num_days=45):
     for target_date in missing_dates:
         print(f"Fetching data for missing date: {target_date}")
         all_data = []
-        for _, commodity in commodities.iterrows():
-            commodity_code = commodity['Commodity']
-            commodity_head = commodity['CommodityHead']
-            url = get_url(commodity_code, commodity_head, Market=0, date_from=target_date, date_to=target_date)
-            print(f"  Commodity {commodity_code} - {commodity_head}")
-            try:
-                soup = get_soup_from_url(url)
-                tables = get_all_tables(soup)
-                if not tables:
-                    continue
-                table = tables[0]
-                headers = get_table_headers(table)
-                rows = get_table_rows(table)
-                for row in rows:
-                    if len(row) == len(headers):
-                        all_data.append(dict(zip(headers, row)))
-                time.sleep(1)
-            except Exception as e:
-                print(f"Error fetching all markets - {commodity_code}: {e}")
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [
+                executor.submit(fetch_commodity_data, commodity['Commodity'], commodity['CommodityHead'], target_date)
+                for _, commodity in commodities.iterrows()
+            ]
+            for future in as_completed(futures):
+                all_data.extend(future.result())
         if all_data:
             new_df = pd.DataFrame(all_data)
             new_df.to_sql('market_prices', engine, if_exists='append', index=False)
             print(f"Appended {len(new_df)} new rows for {target_date} to the database.")
+
+            # --- Ensure indexes exist for fast queries ---
+            with engine.connect() as conn:
+                conn.execute(
+                    text('CREATE INDEX IF NOT EXISTS idx_commodity ON market_prices("Commodity");')
+                )
+                conn.execute(
+                    text('CREATE INDEX IF NOT EXISTS idx_district ON market_prices("District Name");')
+                )
+                conn.execute(
+                    text('CREATE INDEX IF NOT EXISTS idx_commodity_district ON market_prices("Commodity", "District Name");')
+                )
+                print("Ensured indexes exist on Commodity and District Name columns.")
         else:
             print(f"No new data scraped for {target_date}.")
 
     # Delete data older than the window
     min_date = date_list[0]
+    min_date_str = min_date.strftime('%d %b %Y')
     with engine.begin() as conn:
         conn.execute(
-            text(f'DELETE FROM market_prices WHERE \"{date_col}\" < :min_date'),
-            {"min_date": min_date.strftime('%Y-%m-%d')}
+            text(f'''
+                DELETE FROM market_prices
+                WHERE "Price Date" < :min_date
+            '''),
+            {"min_date": min_date_str}
         )
     print(f"Deleted data older than {min_date}.")
 

@@ -32,4 +32,7 @@ __pycache__/
 chroma_db/
 chroma_seeds/
 
+
 .venv/
+
+chat_history.db
